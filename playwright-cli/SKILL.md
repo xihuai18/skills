@@ -49,6 +49,7 @@ playwright-cli install --skills
 - 用户要填写表单、登录、切标签、上传文件
 - 用户要生成截图、PDF、trace、video 或排查控制台 / 网络请求
 - 用户明确要求使用 `playwright-cli`
+- 用户要在 CI、SSH 或远程无界面环境里跑真实网页流程
 
 不要优先使用我：
 
@@ -84,6 +85,39 @@ playwright-cli press Enter
 playwright-cli screenshot
 playwright-cli close
 ```
+
+## Headless mode first
+
+`playwright-cli` 默认就是 headless；`open --help` 只有 `--headed`，没有单独的 `--headless` 开关。
+所以 agent 的默认策略应是：先按 headless 跑通，再在确有必要时切到 headed。
+
+优先保持 headless 的场景：
+
+- 远程 shell、CI、SSH 或容器里没有可见桌面
+- 任务目标是抓证据，而不是人工盯着页面
+- agent 要长时间、低干扰地反复调用浏览器
+- 需要把 artifact 留到文件里供用户复查
+
+推荐命令链：
+
+```bash
+playwright-cli -s=bug-123 open https://example.com/login
+playwright-cli -s=bug-123 snapshot --filename=01-login.yaml
+playwright-cli -s=bug-123 fill e5 "user@example.com"
+playwright-cli -s=bug-123 screenshot --filename=02-filled.png
+playwright-cli -s=bug-123 console warning
+playwright-cli -s=bug-123 network
+playwright-cli -s=bug-123 close
+```
+
+headless 下的关键习惯：
+
+- 用 `snapshot` 决定下一步，用 `screenshot` / `console` / `network` 留证据
+- 对要交付给用户的 artifact 指定 `--filename`，避免时间戳文件难以追踪
+- 需要观察实时画面时，先试 `playwright-cli show`；只有确实需要人工看着操作，再改成 `open --headed`
+- 如果要让 headless 行为在重复任务里显式可见，用配置文件固定 `launchOptions.headless: true`
+
+更多细节见：`references/headless-mode.md`
 
 ## Commands to reach for first
 
@@ -244,7 +278,9 @@ playwright-cli open --config=my-config.json
 
 - 没有先 `snapshot` 就直接猜元素 ref
 - 页面更新后继续使用旧 ref
+- 以为没弹出浏览器就是失败；其实 CLI 默认就是 headless
 - 应该用命名 session 却一直复用默认 session，导致状态混乱
+- 在 headless 下需要精确输入却直接 `type`，没有先聚焦或改用 `fill <ref> <text>`
 - 明明要交付证据，却只做了交互没保存 artifact
 - 环境里没装 `@playwright/cli`，却直接假设 `playwright-cli` 可执行
 
@@ -262,13 +298,13 @@ npx playwright-cli snapshot
 这个 skill 在仓库里带了一个最小 smoke test：
 
 ```bash
-python -m unittest "skills/playwright-cli/tests/test_playwright_cli_smoke.py"
+python -m unittest "playwright-cli/tests/test_playwright_cli_smoke.py"
 ```
 
 它会验证两件事：
 
 - `playwright-cli --help` 可用
-- 最小浏览器流程 `open -> snapshot -> eval -> close` 可跑通
+- 默认 headless 流程 `open -> snapshot -> eval -> screenshot -> close` 可跑通，并产出 artifact
 
 ## How to help the user well
 

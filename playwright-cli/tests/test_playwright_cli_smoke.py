@@ -47,14 +47,16 @@ class PlaywrightCliSmokeTests(unittest.TestCase):
         self.assertIn("playwright-cli", result.stdout)
         self.assertIn("snapshot", result.stdout)
 
-    def test_basic_browser_workflow(self):
+    def test_basic_headless_browser_workflow(self):
         self.run_cli("open", "https://example.com")
         self.run_cli("snapshot", "--filename=example.yaml")
         title = self.run_cli("eval", "document.title")
+        self.run_cli("screenshot", "--filename=example.png")
         self.run_cli("close")
 
         self.assertIn("Example Domain", title.stdout)
         self.assertTrue((self.workdir / "example.yaml").is_file())
+        self.assertTrue((self.workdir / "example.png").is_file())
 
 
 if __name__ == "__main__":
