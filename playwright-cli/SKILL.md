@@ -64,14 +64,7 @@ npx playwright-cli --help
 如果你想直接生成一份可分发给 worker 的计划文件，可以先跑：
 
 ```bash
-python playwright-cli/scripts/parallel_run_manifest.py \
-  --run-id run42 \
-  --tool opencode \
-  --agent-id a1 \
-  --agent-id a2 \
-  --source https://example.com/a.pdf \
-  --source https://example.com/b.pdf \
-  --output ./tmp/run42/parallel-plan.json
+python playwright-cli/scripts/parallel_run_manifest.py --help
 ```
 
 ### Hard rules
@@ -92,7 +85,7 @@ python playwright-cli/scripts/parallel_run_manifest.py \
 - download dir: `./tmp/playwright/<run_id>/<agent_id>/downloads`
 - state file: `./tmp/playwright/<run_id>/<agent_id>/state.json`
 
-更多细节见：`references/parallel-workflows.md`、`references/coordinator-template.md`、`references/session-management.md`
+更多细节见：`references/parallel-and-sessions.md`
 
 ## Quick start
 
@@ -193,11 +186,9 @@ playwright-cli show
 
 ## Pointers
 
-- 并行工作流详解：`playwright-cli/references/parallel-workflows.md`
-- 协调器模板：`playwright-cli/references/coordinator-template.md`
-- session 管理：`playwright-cli/references/session-management.md`
-- headless 说明：`playwright-cli/references/headless-mode.md`
-- references 导航：`playwright-cli/references/README.md`
+- `playwright-cli/references/parallel-and-sessions.md` - 需要协调多个 worker、管理 session、做文件式交接时再读
+- `playwright-cli/references/headless-mode.md` - 需要稳定 headless 行为或远程环境细节时再读
+- `playwright-cli/references/test-generation.md` - 需要把真实流程翻译成 Playwright test 时再读
 - 统一计划生成：`playwright-cli/scripts/parallel_run_manifest.py`
 
 ## Tests

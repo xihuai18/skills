@@ -1,4 +1,4 @@
-# Parallel Workflows with playwright-cli
+# Parallel and Session Guide for playwright-cli
 
 ## 适用场景
 
@@ -7,41 +7,31 @@
 - 多个 subagent 同时跑网页任务
 - 多个 OpenCode / Codex / Claude Code session 共用一台机器
 - 一个协调器把网页任务拆给多个 worker
-
-## 先看这个最小流程
-
-如果你不想先读完整篇，先照这 5 步跑：
-
-1. 协调器为每个 worker 分配唯一 `session`
-2. 每个 worker 使用独立 `profile/` 和 `artifacts/`
-3. 每条命令都显式写 `-s=<session>`
-4. 交接只传 `state-save`、截图、日志、URL、下载文件
-5. 收尾时只关闭自己的 session
-
-如果想把这套规则先固化成文件，再把文件发给多个 worker，先生成：
-
-```bash
-python playwright-cli/scripts/parallel_run_manifest.py \
-  --run-id run42 \
-  --tool opencode \
-  --agent-id a1 \
-  --agent-id a2 \
-  --source https://example.com/a.pdf \
-  --output ./tmp/run42/parallel-plan.json
-```
+- 需要长期保留登录态或做文件式交接
 
 ## 最小安全模型
 
-把下面这 4 条当成默认规则：
+默认先满足这 4 条：
 
 1. 一个 worker 一个 session
 2. 一个 worker 一个 profile 目录
-3. 一个 worker 一个 artifact 目录
+3. 一个 worker 一个 artifact / download 目录
 4. 只有 session owner 才负责关闭自己的 session
 
 如果做不到这 4 条，就很容易出现状态串线、登录态互相污染、截图写乱、错误清理掉别人的浏览器。
 
-## 推荐目录约定
+## 命名与目录约定
+
+```text
+session   = pw-<tool>-<run_id>-<agent_id>
+root      = ./tmp/playwright/<run_id>/<agent_id>
+profile   = <root>/profile
+artifacts = <root>/artifacts
+downloads = <root>/downloads
+state     = <root>/state.json
+```
+
+推荐目录树：
 
 ```text
 tmp/
@@ -50,32 +40,62 @@ tmp/
       a1/
         profile/
         artifacts/
+        downloads/
         state.json
       a2/
         profile/
         artifacts/
+        downloads/
         state.json
 ```
 
-## 推荐 session 约定
+## 协调器最小流程
 
-```text
-pw-<tool>-<run_id>-<agent_id>
+协调器至少要负责：
+
+1. 分配 `run_id` 和 `agent_id`
+2. 为每个 worker 生成 `session/profile/artifacts/downloads/state`
+3. 明确谁负责 cleanup
+4. 明确交接只靠文件、URL、日志，不靠 live session
+
+如果不想手工拼这些字段，可以直接生成：
+
+```bash
+python playwright-cli/scripts/parallel_run_manifest.py --help
 ```
 
-例如：
+给 worker 的最小输入应包含：
 
-- `pw-opencode-run42-a1`
-- `pw-claudecode-run42-a2`
-- `pw-codex-run42-a3`
+```json
+{
+  "run_id": "run42",
+  "agent_id": "a1",
+  "session": "pw-<tool>-run42-a1",
+  "profile_dir": "./tmp/playwright/run42/a1/profile",
+  "artifact_dir": "./tmp/playwright/run42/a1/artifacts",
+  "download_dir": "./tmp/playwright/run42/a1/downloads",
+  "state_file": "./tmp/playwright/run42/a1/state.json"
+}
+```
 
-这样做的好处：
+## Session 与状态管理
 
-- `playwright-cli list` 时一眼能看出归属
-- 协调器能按前缀筛选自己这次任务创建的 session
-- 出问题时容易定位到具体 worker
+这些情况不要继续依赖默认 session：
 
-## 推荐并行模式
+- 同时操作两个网站或两个账号
+- 一个任务要长期保留登录态
+- 你需要让用户稍后继续接管同一个浏览器上下文
+- 同一台机器上有多个 subagent 或多个 coding session 同时跑
+
+状态保存建议：
+
+- 需要跨浏览器重启复用状态：`--persistent`
+- 需要显式导出登录态：`state-save auth.json`
+- 需要恢复状态：`state-load auth.json`
+- 并行环境里，`auth.json` 也要按 worker 隔离
+- 真正需要共享状态时，共享 `state-save` 产物，不要共享 live session
+
+## 并行模式
 
 ### 模式 1：完全隔离
 
@@ -89,7 +109,7 @@ pw-<tool>-<run_id>-<agent_id>
 
 ### 模式 2：文件式交接
 
-worker A 完成登录或准备动作后，把可移交信息写出来：
+worker A 完成登录或准备动作后，只交接这些稳定产物：
 
 - `state-save` 导出的状态文件
 - 截图或 snapshot
@@ -104,24 +124,16 @@ worker B 只消费这些文件，不直接接管 A 的 live session。
 - 先登录，再换 worker 做后续验证
 - 先抓证据，再换 worker 生成测试
 
-## 环境变量使用规则
+## 环境变量与清理规则
 
-`PLAYWRIGHT_CLI_SESSION` 很方便，但只适合在“当前 shell 只服务一个 worker”时使用。
-
-安全用法：
-
-```bash
-PLAYWRIGHT_CLI_SESSION=pw-opencode-run42-a1 claude .
-```
+`PLAYWRIGHT_CLI_SESSION` 只适合在“当前 shell 只服务一个 worker”时使用。
 
 不安全用法：
 
 - 一个父 shell 导出同一个 `PLAYWRIGHT_CLI_SESSION`，再 fork 出多个 worker 共用它
 - 不同工具实例继承到同一个 session 名
 
-## 清理规则
-
-优先级从安全到危险：
+清理优先级从安全到危险：
 
 1. `playwright-cli -s=<my-session> close`
 2. 协调器根据自己分配的前缀逐个关闭自己的 session
@@ -141,26 +153,3 @@ PLAYWRIGHT_CLI_SESSION=pw-opencode-run42-a1 claude .
 - 截图互相覆盖：多个 worker 写进同一个目录，且没显式命名
 - 浏览器突然全没了：有人在共享环境里执行了 `close-all` 或 `kill-all`
 - headed 输入跑偏：另一个窗口抢了焦点
-
-## 实操模板
-
-```bash
-RUN_ID=run42
-AGENT_ID=a1
-SESSION="pw-opencode-${RUN_ID}-${AGENT_ID}"
-ROOT="./tmp/playwright/${RUN_ID}/${AGENT_ID}"
-
-playwright-cli -s="${SESSION}" open https://example.com \
-  --persistent \
-  --profile="${ROOT}/profile"
-
-playwright-cli -s="${SESSION}" snapshot \
-  --filename="${ROOT}/artifacts/01-home.yaml"
-
-playwright-cli -s="${SESSION}" state-save "${ROOT}/state.json"
-
-playwright-cli -s="${SESSION}" close
-```
-
-如果你是协调器，先看：`references/coordinator-template.md`
-如果你想直接得到 JSON 计划文件，也可以直接用：`scripts/parallel_run_manifest.py`

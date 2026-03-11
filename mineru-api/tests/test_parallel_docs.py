@@ -14,7 +14,6 @@ class MineruParallelDocsTests(unittest.TestCase):
         self.assertIn("`data_id`", text)
         self.assertIn("轮询间隔默认 `3-10` 秒", text)
         self.assertIn("`playwright-cli` worker 负责登录、找链接、下载文件", text)
-        self.assertIn("references/README.md", text)
         self.assertIn("playwright-cli/scripts/parallel_run_manifest.py", text)
 
         self.assertLess(

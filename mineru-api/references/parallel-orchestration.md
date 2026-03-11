@@ -1,15 +1,5 @@
 # Parallel Orchestration with MinerU API
 
-## 先决定并行颗粒度
-
-不要一上来就“每个 agent 都各自提交一堆任务”。
-
-先按输入类型决定：
-
-- 少量文档：低并发单任务
-- 很多公网 URL：`/extract/task/batch`
-- 很多本地文件：`/file-urls/batch`
-
 ## 最小任务表
 
 并行时至少维护这样一份任务表，可以是 JSONL、CSV 或数据库：
@@ -21,7 +11,7 @@
   "task_id": null,
   "batch_id": "batch-123",
   "state": "pending",
-  "output_dir": "out/mineru/run42/paper-001"
+  "output_dir": "./tmp/mineru/run42/paper-001"
 }
 ```
 
@@ -104,17 +94,10 @@ tmp/
 - 把发现的 URL 或下载好的本地文件写入任务队列
 - 队列记录至少包含 `source`、`data_id`、`output_dir`
 
-如果想少做手工命名，可以先生成：
+如果想少做手工命名，可以先生成统一计划文件：
 
 ```bash
-python playwright-cli/scripts/parallel_run_manifest.py \
-  --run-id run42 \
-  --tool opencode \
-  --agent-id a1 \
-  --agent-id a2 \
-  --source https://example.com/a.pdf \
-  --source ./downloads/b.pdf \
-  --output ./tmp/run42/parallel-plan.json
+python playwright-cli/scripts/parallel_run_manifest.py --help
 ```
 
 这份 JSON 里：

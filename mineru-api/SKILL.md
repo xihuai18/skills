@@ -85,20 +85,7 @@ metadata:
 3. `mineru-api` worker 负责批量提交、轮询、下载 `full_zip_url`
 4. 清洗阶段按文档独立输出，不共享 `assets/` 或 `manifest.json`
 
-如果已经在用 `playwright-cli` 的并行规范，可以先生成统一计划文件：
-
-```bash
-python playwright-cli/scripts/parallel_run_manifest.py \
-  --run-id run42 \
-  --tool opencode \
-  --agent-id a1 \
-  --agent-id a2 \
-  --source https://example.com/a.pdf \
-  --source ./downloads/b.pdf \
-  --output ./tmp/run42/parallel-plan.json
-```
-
-然后让浏览器 worker 使用里面的 `workers[*]`，让 MinerU worker 使用里面的 `documents[*]`。
+如果已经在用 `playwright-cli` 的并行规范，可以用 `playwright-cli/scripts/parallel_run_manifest.py` 生成统一计划文件，再让浏览器 worker 使用 `workers[*]`，让 MinerU worker 使用 `documents[*]`。
 
 更多细节见：`references/parallel-orchestration.md`
 
@@ -211,8 +198,7 @@ Accept: */*
 
 ## Pointers
 
-- 并行编排：`mineru-api/references/parallel-orchestration.md`
-- references 导航：`mineru-api/references/README.md`
+- `mineru-api/references/parallel-orchestration.md` - 需要任务表、目录树、轮询调优和分阶段编排时再读
 - 清洗脚本：`mineru-api/scripts/mineru_to_markdown.py`
 - 与 `playwright-cli` 共享计划文件：`playwright-cli/scripts/parallel_run_manifest.py`
 
