@@ -26,14 +26,14 @@ class PlaywrightParallelDocsTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn("一个 worker 一个 session", text)
+        self.assertIn("默认假设你已经读过 `SKILL.md` 里的并行硬规则", text)
         self.assertIn("`PLAYWRIGHT_CLI_SESSION`", text)
         self.assertIn("`state-save`", text)
         self.assertIn("close-all", text)
         self.assertIn("parallel_run_manifest.py", text)
         self.assertIn("session   = pw-<tool>-<run_id>-<agent_id>", text)
-        self.assertIn("只有 session owner 才负责关闭自己的 session", text)
-        self.assertIn("一个 worker 一个 profile 目录", text)
+        self.assertIn("协调器根据自己分配的前缀逐个关闭自己的 session", text)
+        self.assertIn('"profile_dir": "./tmp/playwright/run42/a1/profile"', text)
 
 
 if __name__ == "__main__":

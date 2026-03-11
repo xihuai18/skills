@@ -1,26 +1,8 @@
 # Parallel and Session Guide for playwright-cli
 
-## 适用场景
+默认假设你已经读过 `SKILL.md` 里的并行硬规则；这里只补充更展开的协调、交接、清理和排障细节。
 
-这份说明专门给这些场景用：
-
-- 多个 subagent 同时跑网页任务
-- 多个 OpenCode / Codex / Claude Code session 共用一台机器
-- 一个协调器把网页任务拆给多个 worker
-- 需要长期保留登录态或做文件式交接
-
-## 最小安全模型
-
-默认先满足这 4 条：
-
-1. 一个 worker 一个 session
-2. 一个 worker 一个 profile 目录
-3. 一个 worker 一个 artifact / download 目录
-4. 只有 session owner 才负责关闭自己的 session
-
-如果做不到这 4 条，就很容易出现状态串线、登录态互相污染、截图写乱、错误清理掉别人的浏览器。
-
-## 命名与目录约定
+## 命名约定速查
 
 ```text
 session   = pw-<tool>-<run_id>-<agent_id>
@@ -29,24 +11,6 @@ profile   = <root>/profile
 artifacts = <root>/artifacts
 downloads = <root>/downloads
 state     = <root>/state.json
-```
-
-推荐目录树：
-
-```text
-tmp/
-  playwright/
-    run42/
-      a1/
-        profile/
-        artifacts/
-        downloads/
-        state.json
-      a2/
-        profile/
-        artifacts/
-        downloads/
-        state.json
 ```
 
 ## 协调器最小流程
