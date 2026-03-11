@@ -161,6 +161,119 @@ python skills/mineru-api/scripts/mineru_to_markdown.py \
 2. 记录 `batch_id`
 3. `GET https://mineru.net/api/v4/extract-results/batch/{batch_id}` 轮询
 
+## Parallel and batch orchestration
+
+当多个 agent 同时处理很多文档时，重点不是“能不能并行发请求”，而是“如何避免重复提交、输出互相覆盖、轮询把 API 打爆”。
+
+### Choose the right shape first
+
+- 少量、彼此独立的文档：可以用多个单任务，但要限制并发数
+- 一组公网 URL：优先 `POST /extract/task/batch`
+- 一组本地文件：优先 `POST /file-urls/batch`
+- 已经拿到 `full_zip_url`：不要重复提交，直接进入下载和清洗
+
+### Identity and dedup
+
+并行时，每个文档都要有稳定标识，至少保存：
+
+- `source`: 原始 URL 或本地路径
+- `data_id`: 业务侧唯一 ID
+- `task_id` 或 `batch_id`
+- `output_dir`
+- `state`
+
+推荐做法：
+
+- 先为每个文档分配稳定 `data_id`
+- 真正提交前先查本地任务表，避免同一份文档被多个 worker 重复提交
+- 轮询和下载阶段也继续沿用同一个 `data_id`
+
+### Output isolation
+
+不要让多个文档共用一个输出目录。推荐：
+
+```text
+./tmp/mineru/<run_id>/<data_id>/
+```
+
+每个 `data_id` 下单独保存：
+
+- 原始 zip
+- 解压后的 raw 目录
+- 清洗后的 markdown
+- `assets/`
+- `manifest.json`
+- 一个任务元数据文件，例如 `job.json`
+
+### Polling discipline
+
+没有明确官方限流数字时，先用保守策略：
+
+- 同一个 token 下，把活跃提交和轮询控制在低个位数
+- 轮询间隔默认 `3-10` 秒
+- 给不同 worker 的轮询时间加一点 jitter，避免同时打到同一秒
+- 遇到网络抖动、`5xx`、超时，做指数退避后再重试
+
+如果是大批量任务，优先减少“轮询 worker 数量”，而不是让每个 worker 自己高频轮询。
+
+### Helper script scope
+
+`scripts/mineru_to_markdown.py` 更像“单文档处理器”，不是通用并行调度器。
+
+- 它适合处理一个 URL、一个 PDF、一个 ZIP 或一个 raw 目录
+- 如果你有很多文档，应该由外层协调器分配 `data_id`、提交任务、轮询结果、再逐个调用脚本清洗
+
+### Safe patterns with playwright-cli
+
+这两个 skill 可以并行配合，但交接物必须稳定、可落盘。
+
+如果只想先快速、安全地并行起来，默认用这个分工：
+
+1. `playwright-cli` worker 负责登录、找链接、下载文件
+2. 一个协调器负责给文档分配 `data_id` 和输出目录
+3. `mineru-api` worker 负责批量提交、轮询、下载 `full_zip_url`
+4. 清洗阶段按文档独立输出，不共享 `assets/` 或 `manifest.json`
+
+如果已经在用 `playwright-cli` 的并行规范，可以先生成统一计划文件：
+
+```bash
+python playwright-cli/scripts/parallel_run_manifest.py \
+  --run-id run42 \
+  --tool opencode \
+  --agent-id a1 \
+  --agent-id a2 \
+  --source https://example.com/a.pdf \
+  --source ./downloads/b.pdf \
+  --output ./tmp/run42/parallel-plan.json
+```
+
+然后让浏览器 worker 使用里面的 `workers[*]`，让 MinerU worker 使用里面的 `documents[*]`。
+
+模式 A：`playwright-cli` 收集 URL，MinerU 解析
+
+1. 多个浏览器 worker 各自访问页面、拿到文档 URL
+2. 它们把 URL 和元数据写进统一任务队列文件或目录
+3. 单独的 MinerU worker 读取这些 URL，按批或按小并发提交
+
+模式 B：`playwright-cli` 下载受登录保护的文件，MinerU 批量上传
+
+1. 浏览器 worker 用各自独立下载目录把 PDF 下载到本地
+2. 协调器汇总本地文件列表
+3. MinerU worker 走 `/file-urls/batch` 上传并轮询
+
+模式 C：MinerU 先解析，浏览器 worker 再做结果验证
+
+1. MinerU worker 产出 markdown 和资源目录
+2. 浏览器 worker 用这些结果做页面比对、预览验证或回归检查
+
+并行交接时不要共享：
+
+- 同一个浏览器下载目录
+- 同一个 MinerU 输出目录
+- 同一个文档的重复提交权限
+
+更多细节见：`references/parallel-orchestration.md`
+
 ## Auth and headers
 
 所有核心请求都需要：
@@ -342,3 +455,4 @@ curl --location --request POST 'https://mineru.net/api/v4/file-urls/batch' \
 - 如果用户只是要“怎么接入”，优先输出最小可用 curl 示例和状态说明
 - 如果用户已经拿到 `full_zip_url`，下一步重点转到下载、解压和读取结果文件，而不是继续重复轮询
 - 如果用户目标是“拿到可交付 markdown”，优先让其使用 `scripts/mineru_to_markdown.py`，而不是让用户手动拼接 API + 解压 + 重命名流程
+- 如果用户明确提到并行处理，先帮用户设计 `data_id`、任务表、输出目录和轮询策略，再决定是单任务并发还是 batch API
