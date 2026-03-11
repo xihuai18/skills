@@ -10,10 +10,17 @@ class MineruParallelDocsTests(unittest.TestCase):
         text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
 
         self.assertIn("## Parallel and batch orchestration", text)
+        self.assertIn("这是默认规则", text)
         self.assertIn("`data_id`", text)
         self.assertIn("轮询间隔默认 `3-10` 秒", text)
         self.assertIn("`playwright-cli` worker 负责登录、找链接、下载文件", text)
+        self.assertIn("references/README.md", text)
         self.assertIn("playwright-cli/scripts/parallel_run_manifest.py", text)
+
+        self.assertLess(
+            text.index("## Parallel and batch orchestration"),
+            text.index("## Quick start"),
+        )
 
     def test_parallel_reference_covers_queue_and_cleanup_shape(self):
         text = (ROOT / "references" / "parallel-orchestration.md").read_text(

@@ -10,10 +10,17 @@ class PlaywrightParallelDocsTests(unittest.TestCase):
         text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
 
         self.assertIn("## Parallel safety for multi-agent work", text)
+        self.assertIn("这是默认且优先的规则", text)
         self.assertIn("一个 worker 只拥有一个自己的 session", text)
         self.assertIn("不要对共享环境执行 `close-all` 或 `kill-all`", text)
         self.assertIn("references/coordinator-template.md", text)
+        self.assertIn("references/README.md", text)
         self.assertIn("scripts/parallel_run_manifest.py", text)
+
+        self.assertLess(
+            text.index("## Parallel safety for multi-agent work"),
+            text.index("## Quick start"),
+        )
 
     def test_parallel_reference_covers_isolation_and_handoff(self):
         text = (ROOT / "references" / "parallel-workflows.md").read_text(
